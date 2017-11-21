@@ -86,7 +86,7 @@ int main()
     ifstream inputF;
     inputF.open("..\\data_practice\\PLA_train_data.txt",ios::in);
     if(!inputF){
-        cout<<"error"<<endl;
+        cout<<"read file error"<<endl;
         return 0;
     }
 
