@@ -189,16 +189,16 @@ int main()
 			inputTest >> temp;
 			(*j).push_back(temp);
 		}
-//		inputTest >> temp;      // If test data have y
-//		testSign.push_back(temp);
+		inputTest >> temp;      // If test data have y
+		testSign.push_back(temp);
 	}
 	testDatas.pop_back(); //clear ghost data owing to '\n'
-//	testSign.pop_back();
+	testSign.pop_back();
 	inputTest.close();
 
 
 
-//	errorNumber = getError(testDatas, pocketWeight, testSign);
+	errorNumber = getError(testDatas, pocketWeight, testSign);
 	vector<int> prediction;
 	prediction = predict(testDatas, pocketWeight);
 
