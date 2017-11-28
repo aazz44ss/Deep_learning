@@ -1,13 +1,5 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import h5py
-import scipy
-from PIL import Image
-from scipy import ndimage
 from numpy import genfromtxt
-
-import sklearn
-import sklearn.linear_model
 
 
 """
@@ -27,158 +19,139 @@ Y_test = genfromtxt("regularization_test_y.txt")
 Y_test.resize(1,Y_test.shape[0])
 
 
-# GRADED FUNCTION: sigmoid
-def sigmoid(z):
-    s = 1/(1+np.exp(-z))
-    return s
-
-# GRADED FUNCTION: initialize_with_zeros
-def initialize_with_zeros(dim):
-    w = np.zeros((dim,1))
-    b = 0
-    return w, b
-
-# GRADED FUNCTION: propagate
-def propagate(w, b, X, Y):
+def layer_size(X,Y,hidden_layer):
     """
-    Implement the cost function and its gradient for the propagation explained above
     Arguments:
-    w -- weights, a numpy array of size (num_px * num_px * 3, 1)
-    b -- bias, a scalar
-    X -- data of size (num_px * num_px * 3, number of examples)
-    Y -- true "label" vector (containing 0 if non-cat, 1 if cat) of size (1, number of examples)
-    Return:
-    cost -- negative log-likelihood cost for logistic regression
-    dw -- gradient of the loss with respect to w, thus same shape as w
-    db -- gradient of the loss with respect to b, thus same shape as b
-    """
-    m = X.shape[1]
-    # FORWARD PROPAGATION (FROM X TO COST)
-    A = sigmoid(np.dot(w.T,X)+b)                                    # compute activation
-    cost = -1*np.sum((Y*np.log(A))+((1-Y)*np.log(1-A)))/m                               # compute cost
-    # BACKWARD PROPAGATION (TO FIND GRAD)
-    dw = np.dot(X,((A-Y).T))/m
-    db = np.sum(A-Y,axis=1,keepdims=True)/m
-    grads = {"dw": dw,
-             "db": db}
-    return grads, cost
-
-# GRADED FUNCTION: optimize
-def optimize(w, b, X, Y, num_iterations, learning_rate, print_cost):
-    """
-    This function optimizes w and b by running a gradient descent algorithm
-    Arguments:
-    w -- weights, a numpy array of size (num_px * num_px * 3, 1)
-    b -- bias, a scalar
-    X -- data of shape (num_px * num_px * 3, number of examples)
-    Y -- true "label" vector (containing 0 if non-cat, 1 if cat), of shape (1, number of examples)
-    num_iterations -- number of iterations of the optimization loop
-    learning_rate -- learning rate of the gradient descent update rule
-    print_cost -- True to print the loss every 100 steps
+    X -- input dataset of shape (input size, number of examples)
+    Y -- labels of shape (output size, number of examples)
     Returns:
-    params -- dictionary containing the weights w and bias b
-    grads -- dictionary containing the gradients of the weights and bias with respect to the cost function
-    costs -- list of all the costs computed during the optimization, this will be used to plot the learning curve.
+    n_x -- the size of the input layer, number of eigenvalues
+    n_h -- the size of the hidden layer, number of layer_1
+    n_y -- the size of the output layer
     """
-    costs = []
+    n_x = X.shape[0] # size of input layer
+    n_h = hidden_layer
+    n_y = Y.shape[0] # size of output layer
+
+    return n_x, n_h, n_y
+
+def initial_parameters(n_x,n_h,n_y):
+
+    W1 = np.random.randn(n_h,n_x)*0.01  #If not initialize randomly, it's only linear fit repeat n_h times.
+    b1 = np.zeros((n_h,1))
+    W2 = np.random.randn(n_y,n_h)*0.01
+    b2 = np.zeros((n_y,1))
+
+    parameters = {"W1": W1,
+                  "b1": b1,
+                  "W2": W2,
+                  "b2": b2}
+    return parameters
+
+def forward_propagation(X,parameters):
+    
+    W1 = parameters["W1"]
+    b1 = parameters["b1"]
+    W2 = parameters["W2"]
+    b2 = parameters["b2"]
+
+    Z1 = np.dot(W1,X)+b1
+    A1 = np.tanh(Z1)
+    Z2 = np.dot(W2,A1)+b2
+    A2 = 1/(1+np.exp(-Z2))
+
+    cache = {"Z1": Z1,
+             "A1": A1,
+             "Z2": Z2,
+             "A2": A2}
+    return A2, cache
+
+
+def compute_cost(A2, Y, parameters):
+
+    m = Y.shape[1]
+    cost = np.sum(-1*(Y*np.log(A2)+(1-Y)*np.log(1-A2)))/m
+    cost = np.squeeze(cost)     # makes sure cost is the dimension we expect. 
+                                # E.g., turns [[17]] into 17 
+    return cost
+
+
+def backward_propagation(parameters, cache, X, Y):
+
+    m = X.shape[1]
+    
+    W1 = parameters["W1"]
+    W2 = parameters["W2"]
+
+    A1 = cache["A1"]
+    A2 = cache["A2"]
+
+    dZ2 = A2 - Y
+    dW2 = np.dot(dZ2,A1.T)/m
+    db2 = np.sum(dZ2,axis = 1,keepdims = True)/m
+    dZ1 = np.dot(W2.T,dZ2)*(1-np.power(A1,2))
+    dW1 = np.dot(dZ1,X.T)/m
+    db1 = np.sum(dZ1,axis = 1,keepdims = True)/m
+
+    grads = {"dW1": dW1,
+             "db1": db1,
+             "dW2": dW2,
+             "db2": db2}
+    return grads
+
+def update_parameters(parameters, grads, learning_rate):
+
+    W1 = parameters["W1"]
+    b1 = parameters["b1"]
+    W2 = parameters["W2"]
+    b2 = parameters["b2"]
+
+    dW1 = grads["dW1"]
+    db1 = grads["db1"]
+    dW2 = grads["dW2"]
+    db2 = grads["db2"]
+
+    W1 -= learning_rate*dW1
+    b1 -= learning_rate*db1
+    W2 -= learning_rate*dW2
+    b2 -= learning_rate*db2
+
+    parameters = {"W1": W1,
+                  "b1": b1,
+                  "W2": W2,
+                  "b2": b2}
+
+    return parameters
+
+def predict(parameters, X):
+
+    A2, cache = forward_propagation(X, parameters)
+    predictions = (A2 > 0.5) #A2 is sigmoid function, a number bwtween 0 and 1
+
+    return predictions
+
+def nn_model(X, Y, n_h, num_iterations, learning_rate, print_cost):
+
+    n_x,n_h,n_y = layer_size(X,Y,n_h)
+    parameters = initial_parameters(n_x,n_h,n_y)
+    
     for i in range(num_iterations):
-        # Cost and gradient calculation 
-        grads, cost = propagate(w, b, X, Y)
 
-        dw = grads["dw"]
-        db = grads["db"]
+        A2,cache = forward_propagation(X,parameters)
 
-        w = w-learning_rate*dw
-        b = b-learning_rate*db
-        
-        # Record the costs
-        if i % 100 == 0:
-            costs.append(cost)
-        # Print the cost every 100 training examples
-        if print_cost and i % 1000 == 0:
-            print ("Cost after iteration %i: %f" %(i, cost))
+        if print_cost and i%1000==0 :
+            cost = compute_cost(A2,Y,parameters)
+            print("cost after %6d iterations:%.3f" %(i,cost))
 
-    params = {"w": w,
-              "b": b}
-    grads = {"dw": dw,
-             "db": db}
-    
-    return params, grads, costs
+        grads = backward_propagation(parameters,cache,X,Y)
 
-# GRADED FUNCTION: predict
-def predict(w, b, X):
-    '''
-    Predict whether the label is 0 or 1 using learned logistic regression parameters (w, b)
-    Arguments:
-    w -- weights, a numpy array of size (num_px * num_px * 3, 1)
-    b -- bias, a scalar
-    X -- data of size (num_px * num_px * 3, number of examples)
-    Returns:
-    Y_prediction -- a numpy array (vector) containing all predictions (0/1) for the examples in X
-    '''
-    m = X.shape[1]
-    Y_prediction = np.zeros((1,m))
-    w = w.reshape(X.shape[0], 1)
-    
-    # Compute vector "A" predicting the probabilities 
-    A = sigmoid(np.dot(w.T,X)+b)
-
-    for i in range(A.shape[1]):
-        if(A[0,i] > 0.5):
-            Y_prediction[0,i] = 1
-    
-    return Y_prediction
+        parameters = update_parameters(parameters,grads,learning_rate)
 
 
-# GRADED FUNCTION: model
-def model(X_train, Y_train, X_test, Y_test, num_iterations, learning_rate, print_cost):
-    """
-    Builds the logistic regression model by calling the function you've implemented previously
-    Arguments:
-    X_train -- training set represented by a numpy array of shape (num_px * num_px * 3, m_train)
-    Y_train -- training labels represented by a numpy array (vector) of shape (1, m_train)
-    X_test -- test set represented by a numpy array of shape (num_px * num_px * 3, m_test)
-    Y_test -- test labels represented by a numpy array (vector) of shape (1, m_test)
-    num_iterations -- hyperparameter representing the number of iterations to optimize the parameters
-    learning_rate -- hyperparameter representing the learning rate used in the update rule of optimize()
-    print_cost -- Set to true to print the cost every 100 iterations
-    Returns:
-    d -- dictionary containing information about the model.
-    """
-    # initialize parameters with zeros 
-    w, b = initialize_with_zeros(X_train.shape[0])
+    return parameters
 
-    # Gradient descent 
-    parameters, grads, costs = optimize(w, b, X_train, Y_train, num_iterations, learning_rate, print_cost)
-    
-    # Retrieve parameters w and b from dictionary "parameters"
-    w = parameters["w"]
-    b = parameters["b"]
-    
-    # Predict test/train set examples 
-    Y_prediction_test = predict(w, b, X_test)
-    Y_prediction_train = predict(w, b, X_train)
+parameters = nn_model(X_train,Y_train, n_h=2, num_iterations=10000, learning_rate=0.01, print_cost=True)
+prediction = predict(parameters,X_train)
+print("train accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_train)) * 100))
+prediction = predict(parameters,X_test)
 
-    # Print train/test Errors
-    print("train accuracy: {} %".format(100 - np.mean(np.abs(Y_prediction_train - Y_train)) * 100))
-    print("test accuracy: {} %".format(100 - np.mean(np.abs(Y_prediction_test - Y_test)) * 100))
-
-    d = {"costs": costs,
-         "Y_prediction_test": Y_prediction_test, 
-         "Y_prediction_train" : Y_prediction_train, 
-         "w" : w, 
-         "b" : b,
-         "learning_rate" : learning_rate,
-         "num_iterations": num_iterations}
-    
-    return d
-
-d = model(X_train, Y_train, X_test, Y_test, num_iterations = 20000, learning_rate = 0.005, print_cost = True)
-
-
-#logistic regression FRAMEWORK
-clf = sklearn.linear_model.LogisticRegressionCV();
-clf.fit(X_train.T, Y_train.T);
-LR_predictions = clf.predict(X_train.T)
-print ('Accuracy of logistic regression: %.2f ' % float((np.dot(Y_train,LR_predictions) + np.dot(1-Y_train,1-LR_predictions))/float(Y_train.size)*100) +
-       '% ' + "(percentage of correctly labelled datapoints)")
