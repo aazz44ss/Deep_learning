@@ -87,10 +87,16 @@ def L_model_forward(X, parameters):
 def compute_cost(AL, Y):
 
     m = Y.shape[1]
-    cost = np.sum(-1*(Y*np.log(AL)+(1-Y)*np.log(1-AL)))/m    
+    cost = np.sum(-1*(Y*np.log(AL+0.00001)+(1-Y)*np.log(1-(AL-0.00001))))/m    #AL offset 0.00001 to avoid sometimes AL close to 1, and have log(0) error
     cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
 
     return cost
+
+def cost_sigmoid_backward(AL,Y,cache):
+    linear_cache, activation_cache = cache
+    dZ = AL-Y
+    dA_prev,dW,db = linear_backward(dZ,linear_cache)
+    return dA_prev,dW,db
 
 def linear_backward(dZ, linear_cache):
 
@@ -122,8 +128,9 @@ def L_model_backward(AL, Y, caches):
     grads = {}
     L = len(caches)
 
-    dAL = cost_prime(AL,Y)
-    dA_prev, dW, db = linear_activation_backward(dAL, caches[L-1], "sigmoid")
+#    dAL = cost_prime(AL,Y)
+#    dA_prev, dW, db = linear_activation_backward(dAL, caches[L-1], "sigmoid")
+    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1])  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
     grads["dW"+str(L)] = dW
     grads["db"+str(L)] = db
 
@@ -161,7 +168,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, print_cost):
         AL,caches = L_model_forward(X,parameters)
         if print_cost and i%1000==0:
             cost = compute_cost(AL,Y)
-            print("cost after %6d iterations:%.3f" %(i,cost))
+            print("cost after %d iterations:%f" %(i,cost))
         grads = L_model_backward(AL,Y,caches)
         parameters = update_parameters(parameters, grads, learning_rate)
 
