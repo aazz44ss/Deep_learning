@@ -1,7 +1,17 @@
 import numpy as np
 from numpy import genfromtxt
 
-
+"""
+regularization(正則化,權重衰減):防止某個權重太大造成overfitting
+一組有趨勢的data應是有連續且平滑的，但fitting時W比其他W相比太大造成Z=WA+b變大，硬是fit上結果，造成overfitting
+防止方法是將cost function J=Jo+lambd*|W|^2/2m , dJ/dW = dJ/dW + lambd*|W|/m
+Jo為原本的cost function，受到預測和結果是否擬合影響。lambd*|W|^2/2m 為控制W不要過度膨脹
+當某個W過大會造成cost function增加，因此不會是最佳的cost
+利用lambd控制W影響cost function的比例。
+當lambd=0 則和沒有權重衰減一樣
+當lambd很大，則W影響到cost function比例很大，因此會變成如何把W fit到最小，而忽略了Jo項結果是否吻合，整個會退化成linear regression
+在實作上為了不要傳遞那麼多參數，因此只將lambd*|W|/m項放在update parameter的時候 W = W - alpha*(dw+lambd*|W|/m)
+"""
 def relu(Z):
     A = Z*(Z>0)
     return A,Z
@@ -84,13 +94,22 @@ def L_model_forward(X, parameters):
 
     return AL,caches
 
-def compute_cost(AL, Y):
+def compute_cost(AL, Y, parameters, lambd):
 
     m = Y.shape[1]
-    cost = np.sum(-1*(Y*np.log(AL+0.00001)+(1-Y)*np.log(1-(AL-0.00001))))/m    #AL offset 0.00001 to avoid sometimes AL close to 1, and have log(0) error
-    cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
+    L = len(parameters)//2
 
-    return cost
+    cost = np.sum(-1*(Y*np.log(AL+0.001)+(1-Y)*np.log(1-(AL-0.001))))/m    #AL offset 0.001 to avoid somtimes AL close to 1, and have log(0) error
+    cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
+    
+    L2_regularization_cost=0
+    for i in range(L):
+        L2_regularization_cost += np.sum(np.square(parameters["W"+str(i+1)]))
+    L2_regularization_cost = np.squeeze(L2_regularization_cost)*lambd/2/m      
+    
+    total_cost = cost + L2_regularization_cost
+
+    return total_cost
 
 def cost_sigmoid_backward(AL,Y,cache):
     linear_cache, activation_cache = cache
@@ -142,13 +161,13 @@ def L_model_backward(AL, Y, caches):
 
     return grads
 
-def update_parameters(parameters, grads, learning_rate):
+def update_parameters(parameters, grads, learning_rate,lambd_divide_m):
 
     L = len(parameters) // 2 
 
     for i in range(L):
-        parameters["W"+str(i+1)] -= learning_rate*grads["dW"+str(i+1)]
-        parameters["b"+str(i+1)] -= learning_rate*grads["db"+str(i+1)]
+        parameters["W"+str(i+1)] = parameters["W"+str(i+1)] - learning_rate*(grads["dW"+str(i+1)] + lambd_divide_m*parameters["W"+str(i+1)]) # d(L2_regularization_cost)/dW term
+        parameters["b"+str(i+1)] = parameters["b"+str(i+1)] - learning_rate*grads["db"+str(i+1)]
 
     return parameters
 
@@ -159,25 +178,25 @@ def predict(X, parameters):
 
     return predictions
 
-def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, print_cost):
+def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, print_cost):
 
     np.random.seed(1)
     parameters = initialize_parameters(layers_dims)
+    m = Y.shape[1]
 
     for i in range(num_iterations):
         AL,caches = L_model_forward(X,parameters)
         if print_cost and i%1000==0:
-            cost = compute_cost(AL,Y)
+            cost = compute_cost(AL,Y,parameters,lambd)
             print("cost after %d iterations:%f" %(i,cost))
         grads = L_model_backward(AL,Y,caches)
-        parameters = update_parameters(parameters, grads, learning_rate)
+        parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
 
     return parameters
 
 
-
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=200000, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=200000, lambd=0.5, print_cost=True)
 prediction = predict(X_train,parameters)
 print("train accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_train)) * 100))
 prediction = predict(X_test,parameters)
