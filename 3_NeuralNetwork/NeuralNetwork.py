@@ -1,17 +1,7 @@
 import numpy as np
 from numpy import genfromtxt
 
-"""
-regularization(正則化,權重衰減):防止某個權重太大造成overfitting
-一組有趨勢的data應是有連續且平滑的，但fitting時W比其他W相比太大造成Z=WA+b變大，硬是fit上結果，造成overfitting
-防止方法是將cost function J=Jo+lambd*|W|^2/2m , dJ/dW = dJ/dW + lambd*|W|/m
-Jo為原本的cost function，受到預測和結果是否擬合影響。lambd*|W|^2/2m 為控制W不要過度膨脹
-當某個W過大會造成cost function增加，因此不會是最佳的cost
-利用lambd控制W影響cost function的比例。
-當lambd=0 則和沒有權重衰減一樣
-當lambd很大，則W影響到cost function比例很大，因此會變成如何把W fit到最小，而忽略了Jo項結果是否吻合，整個會退化成linear regression
-在實作上為了不要傳遞那麼多參數，因此只將lambd*|W|/m項放在update parameter的時候 W = W - alpha*(dw+lambd*|W|/m)
-"""
+
 def relu(Z):
     A = Z*(Z>0)
     return A,Z
@@ -94,6 +84,30 @@ def L_model_forward(X, parameters):
 
     return AL,caches
 
+def L_model_forward_dropout(X, parameters,dropout_keep_prob):
+
+    caches = []
+    cache_dropouts = []
+    L = len(parameters)//2
+    A = X
+    for i in range(1,L):
+        A_prev = A
+        A,cache = linear_activation_forward(A_prev, parameters["W"+str(i)], parameters["b"+str(i)], "relu")
+        caches.append(cache)
+
+        #dropout terms
+        D = np.random.rand(A.shape[0],A.shape[1])
+        D = (D < dropout_keep_prob)
+        A = A*D/dropout_keep_prob
+        cache_dropouts.append(D)
+        
+
+    A_prev = A
+    AL,cache = linear_activation_forward(A_prev, parameters["W"+str(L)], parameters["b"+str(L)], "sigmoid")
+    caches.append(cache)
+
+    return AL,caches,cache_dropouts
+
 def compute_cost(AL, Y, parameters, lambd):
 
     m = Y.shape[1]
@@ -161,6 +175,24 @@ def L_model_backward(AL, Y, caches):
 
     return grads
 
+def L_model_backward_dropout(AL, Y, caches, cache_dropouts, dropout_keep_prob):
+
+    grads = {}
+    L = len(caches)
+
+    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1])  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
+    grads["dW"+str(L)] = dW
+    grads["db"+str(L)] = db
+
+    for i in reversed(range(1,L)):
+        dA_prev = dA_prev*cache_dropouts[i-1]/dropout_keep_prob #dropout terms
+        dA = dA_prev
+        dA_prev, dW, db = linear_activation_backward(dA, caches[i-1], "relu")
+        grads["dW"+str(i)] = dW
+        grads["db"+str(i)] = db
+
+    return grads
+
 def update_parameters(parameters, grads, learning_rate,lambd_divide_m):
 
     L = len(parameters) // 2 
@@ -178,25 +210,38 @@ def predict(X, parameters):
 
     return predictions
 
-def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, print_cost):
+def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, dropout_keep_prob, print_cost):
 
     np.random.seed(1)
     parameters = initialize_parameters(layers_dims)
     m = Y.shape[1]
 
-    for i in range(num_iterations):
-        AL,caches = L_model_forward(X,parameters)
-        if print_cost and i%1000==0:
-            cost = compute_cost(AL,Y,parameters,lambd)
-            print("cost after %d iterations:%f" %(i,cost))
-        grads = L_model_backward(AL,Y,caches)
-        parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
+    if dropout_keep_prob == 1.0:
+        for i in range(num_iterations):
+            AL,caches = L_model_forward(X,parameters)
+            if print_cost and i%1000==0:
+                cost = compute_cost(AL,Y,parameters,lambd)
+                print("cost after %d iterations:%f" %(i,cost))
+            grads = L_model_backward(AL,Y,caches)
+            parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
+    else:
+        for i in range(num_iterations):
+            AL,caches,cache_dropouts = L_model_forward_dropout(X,parameters,dropout_keep_prob)
+            if print_cost and i%1000==0:
+                cost = compute_cost(AL,Y,parameters,lambd)
+                print("cost after %d iterations:%f" %(i,cost))
+            grads = L_model_backward_dropout(AL,Y,caches,cache_dropouts,dropout_keep_prob)
+            parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
+
+
 
     return parameters
 
 
+
+
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=200000, lambd=0.5, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=200000, lambd=0.5, dropout_keep_prob=1, print_cost=True)
 prediction = predict(X_train,parameters)
 print("train accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_train)) * 100))
 prediction = predict(X_test,parameters)
