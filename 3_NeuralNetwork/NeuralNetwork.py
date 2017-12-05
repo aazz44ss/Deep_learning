@@ -1,6 +1,10 @@
 import numpy as np
 from numpy import genfromtxt
 
+"""
+利用微分取斜率來求得dW,db，並驗證和backward得到的dW,db是否小於誤差
+若是小於誤差則backward propagation沒有bug
+"""
 
 def relu(Z):
     A = Z*(Z>0)
@@ -113,13 +117,13 @@ def compute_cost(AL, Y, parameters, lambd):
     m = Y.shape[1]
     L = len(parameters)//2
 
-    cost = np.sum(-1*(Y*np.log(AL+0.001)+(1-Y)*np.log(1-(AL-0.001))))/m    #AL offset 0.001 to avoid somtimes AL close to 1, and have log(0) error
+    cost = np.sum(-1*(Y*np.log(AL+0.0001)+(1-Y)*np.log(1-(AL-0.0001))))/m    #  AL offset to avoid somtimes AL close to 1 or 0, and have log(0) error
     cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
     
     L2_regularization_cost=0
     for i in range(L):
         L2_regularization_cost += np.sum(np.square(parameters["W"+str(i+1)]))
-    L2_regularization_cost = np.squeeze(L2_regularization_cost)*lambd/2/m      
+    L2_regularization_cost = np.squeeze(L2_regularization_cost)*lambd/2/m    
     
     total_cost = cost + L2_regularization_cost
 
@@ -203,6 +207,42 @@ def update_parameters(parameters, grads, learning_rate,lambd_divide_m):
 
     return parameters
 
+def backward_check_compute_cost(AL, Y):
+    
+    m = Y.shape[1]
+    cost = np.sum(-1*(Y*np.log(AL)+(1-Y)*np.log(1-(AL))))/m    
+
+    return cost
+
+def backward_check(parameters, X, Y, epsilon):
+    AL,caches = L_model_forward(X,parameters)
+    gradients = L_model_backward(AL,Y,caches)
+    for key, values in parameters.items():
+        for i in range(len(values)):
+            numerator = 0
+            denominator = 0
+            for j in range(len(values[i])):
+
+                parameters[key][i][j] += epsilon
+                AL, _ = L_model_forward(X,parameters)
+                cost_plus = backward_check_compute_cost(AL, Y)
+                parameters[key][i][j] -= 2*epsilon
+                AL, _ = L_model_forward(X,parameters)
+                cost_minus = backward_check_compute_cost(AL, Y)
+                parameters[key][i][j] += epsilon
+
+                grad_approx = (cost_plus - cost_minus)/2/epsilon
+
+                numerator += np.linalg.norm(gradients["d"+key][i][j]-grad_approx)            
+                denominator += np.linalg.norm(gradients["d"+key][i][j])
+                denominator += np.linalg.norm(grad_approx)
+
+        difference = numerator/denominator
+        if difference < 2*epsilon:
+            print("d"+str(key)+":OK")
+        else:
+            print("d"+str(key)+":wrong")
+
 def predict(X, parameters):
 
     AL, cache = L_model_forward(X,parameters)
@@ -215,6 +255,8 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, dropo
     np.random.seed(1)
     parameters = initialize_parameters(layers_dims)
     m = Y.shape[1]
+
+    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
 
     if dropout_keep_prob == 1.0:
         for i in range(num_iterations):
@@ -238,10 +280,10 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, dropo
     return parameters
 
 
-
-
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=200000, lambd=0.5, dropout_keep_prob=1, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=10000, lambd=0.8, dropout_keep_prob=1, print_cost=True)
+
+
 prediction = predict(X_train,parameters)
 print("train accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_train)) * 100))
 prediction = predict(X_test,parameters)
