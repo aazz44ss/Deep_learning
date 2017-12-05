@@ -1,9 +1,12 @@
 import numpy as np
+import math
 from numpy import genfromtxt
 
 """
-利用微分取斜率來求得dW,db，並驗證和backward得到的dW,db是否小於誤差
-若是小於誤差則backward propagation沒有bug
+資料量太太沒辦法一次全部上RAM計算，因此要切割成mini_batch
+
+一次全上的好處:每次更新parameter是針對所有資料更新，因此cost不會有很大的波動
+切成mini_batch好處:一個epochs會更新parameter很多次，但每次更新是針對該次mini_batch計算，cost波動會較大
 """
 
 def relu(Z):
@@ -250,38 +253,59 @@ def predict(X, parameters):
 
     return predictions
 
-def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, lambd, dropout_keep_prob, print_cost):
+def initial_batches(X,Y,batch_size):
+    m = X.shape[1]
+    mini_batches = []
+    cal_batches = math.ceil(m/batch_size)   # avoid batch_size is greater than m
+    for i in range(cal_batches-1):
+        mini_batch_X = X[:,i*batch_size:(i+1)*batch_size]
+        mini_batch_Y = Y[:,i*batch_size:(i+1)*batch_size]
+        mini_batch = mini_batch_X,mini_batch_Y
+        mini_batches.append(mini_batch)
+    mini_batch_X = X[:,(cal_batches-1)*batch_size:cal_batches*batch_size]
+    mini_batch_Y = Y[:,(cal_batches-1)*batch_size:cal_batches*batch_size]
+    mini_batch = mini_batch_X,mini_batch_Y
+    mini_batches.append(mini_batch)
+    return mini_batches
+
+def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, lambd, dropout_keep_prob, print_cost):
 
     np.random.seed(1)
     parameters = initialize_parameters(layers_dims)
     m = Y.shape[1]
 
-    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
+#    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
 
     if dropout_keep_prob == 1.0:
-        for i in range(num_iterations):
-            AL,caches = L_model_forward(X,parameters)
+        for i in range(num_epochs):
+            mini_batches = initial_batches(X,Y,batch_size)
+            for mini_batch in mini_batches:
+                mini_batch_X,mini_batch_Y = mini_batch
+                AL,caches = L_model_forward(mini_batch_X,parameters)
+                grads = L_model_backward(AL,mini_batch_Y,caches)
+                parameters = update_parameters(parameters, grads, learning_rate,lambd/mini_batch_Y.shape[1])
             if print_cost and i%1000==0:
-                cost = compute_cost(AL,Y,parameters,lambd)
-                print("cost after %d iterations:%f" %(i,cost))
-            grads = L_model_backward(AL,Y,caches)
-            parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
+                cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
+                prediction = predict(X,parameters)
+                print("cost after %6d epochs:%.3f ,accuracy: %.2f%%" %(i,cost,(100 - np.mean(np.abs(prediction - Y)) * 100)))
     else:
-        for i in range(num_iterations):
-            AL,caches,cache_dropouts = L_model_forward_dropout(X,parameters,dropout_keep_prob)
+        for i in range(num_epochs):
+            mini_batches = initial_batches(X,Y,batch_size)
+            for mini_batch in mini_batches:
+                mini_batch_X,mini_batch_Y = mini_batch
+                AL,caches,cache_dropouts = L_model_forward_dropout(mini_batch_X,parameters,dropout_keep_prob)
+                grads = L_model_backward_dropout(AL,mini_batch_Y,caches,cache_dropouts,dropout_keep_prob)
+                parameters = update_parameters(parameters, grads, learning_rate,lambd/mini_batch_Y.shape[1])
             if print_cost and i%1000==0:
-                cost = compute_cost(AL,Y,parameters,lambd)
-                print("cost after %d iterations:%f" %(i,cost))
-            grads = L_model_backward_dropout(AL,Y,caches,cache_dropouts,dropout_keep_prob)
-            parameters = update_parameters(parameters, grads, learning_rate,lambd/m)
-
-
+                cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
+                prediction = predict(X,parameters)
+                print("cost after %6d epochs:%.3f ,accuracy: %.2f%%" %(i,cost,(100 - np.mean(np.abs(prediction - Y)) * 100)))
 
     return parameters
 
 
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_iterations=10000, lambd=0.8, dropout_keep_prob=1, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_epochs=10000, batch_size = 999, lambd=0.8, dropout_keep_prob=1, print_cost=True)
 
 
 prediction = predict(X_train,parameters)
