@@ -3,12 +3,13 @@ import math
 from numpy import genfromtxt
 
 """
-針對mini_batch每次更新parameter只針對該次mini_batch更新的缺點做改進
-W = W + alpha*dW   (X)
-------------------------
-v = beta*v+(1-beta)*dW，
-W = W + alpha*v
-每次更新W都會含有beta比例的前幾次mini_batch的影響，只有(1-beta)比例這次mini_batch影響
+Adam, adaptive momentum
+v = beta1*v + (1-beta1)*dx       ==>momentum
+s = beta2*s + (1-beta2)*(dx**2)  ==>RMSprop
+W += - learning_rate * v / (np.sqrt(s) + eps)
+
+因mini_batch內的特徵值更新都是往local optimal移動，但是大方向是往global optimal
+利用RMSprob可以將所有朝local optimal的向量加起來，這樣會正負抵銷只剩下朝global optimal的分量
 """
 
 def relu(Z):
@@ -56,15 +57,17 @@ def initialize_parameters(layers_dims):
         parameters["b"+str(i)] = np.zeros((layers_dims[i],1))
     return parameters
 
-def initialize_velocity(parameters):
+def initialize_adam(parameters):
 
     L = len(parameters)//2
     v = {}
+    s = {}
     for i in range(L):
         v["dW"+str(i+1)] = np.zeros(parameters["W"+str(i+1)].shape)
         v["db"+str(i+1)] = np.zeros(parameters["b"+str(i+1)].shape)
-    
-    return v
+        s["dW"+str(i+1)] = np.zeros(parameters["W"+str(i+1)].shape)
+        s["db"+str(i+1)] = np.zeros(parameters["b"+str(i+1)].shape)
+    return v,s
 
 def linear_forward(A_prev, W, b):
 
@@ -130,7 +133,7 @@ def compute_cost(AL, Y, parameters, lambd):
     m = Y.shape[1]
     L = len(parameters)//2
 
-    cost = np.sum(-1*(Y*np.log(AL+0.0001)+(1-Y)*np.log(1-(AL-0.0001))))/m    #  AL offset to avoid somtimes AL close to 1 or 0, and have log(0) error
+    cost = np.sum(-1*(Y*np.log(AL+0.0000001)+(1-Y)*np.log(1-(AL-0.0000001))))/m    #  AL offset to avoid somtimes AL close to 1 or 0, and have log(0) error
     cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
     
     L2_regularization_cost=0
@@ -210,15 +213,17 @@ def L_model_backward_dropout(AL, Y, caches, cache_dropouts, dropout_keep_prob):
 
     return grads
 
-def update_parameters(parameters, grads, v, beta1, learning_rate,lambd_divide_m):
+def update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, m):
 
     L = len(parameters) // 2 
-
+    epsilon=0.00001
     for i in range(L):
-        v["dW"+str(i+1)] = beta1*v["dW"+str(i+1)] + (1-beta1)*(grads["dW"+str(i+1)] + lambd_divide_m*parameters["W"+str(i+1)]) # d(L2_regularization_cost)/dW term
+        v["dW"+str(i+1)] = beta1*v["dW"+str(i+1)] + (1-beta1)*(grads["dW"+str(i+1)] + lambd*parameters["W"+str(i+1)]/m) # d(L2_regularization_cost)/dW term
         v["db"+str(i+1)] = beta1*v["db"+str(i+1)] + (1-beta1)*grads["db"+str(i+1)]
-        parameters["W"+str(i+1)] = parameters["W"+str(i+1)] - learning_rate*v["dW"+str(i+1)] 
-        parameters["b"+str(i+1)] = parameters["b"+str(i+1)] - learning_rate*v["db"+str(i+1)]
+        s["dW"+str(i+1)] = beta2*s["dW"+str(i+1)]+(1-beta2)*np.square(grads["dW"+str(i+1)] + lambd*parameters["W"+str(i+1)]/m)
+        s["db"+str(i+1)] = beta2*s["db"+str(i+1)]+(1-beta2)*np.square(grads["db"+str(i+1)])
+        parameters["W"+str(i+1)] = parameters["W"+str(i+1)] - learning_rate*v["dW"+str(i+1)]/(np.sqrt(s["dW"+str(i+1)])+epsilon)*(1-beta2+epsilon) # epsilon avoid divide 0 error
+        parameters["b"+str(i+1)] = parameters["b"+str(i+1)] - learning_rate*v["db"+str(i+1)]/(np.sqrt(s["db"+str(i+1)])+epsilon)*(1-beta2+epsilon) # (1-beta2+epsilon) can scale back and achieve close adam if we set beta2=1
 
     return parameters
 
@@ -280,14 +285,15 @@ def initial_batches(X,Y,batch_size):
     mini_batches.append(mini_batch)
     return mini_batches
 
-def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta1, lambd, dropout_keep_prob, print_cost):
+
+def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta1, beta2, lambd, dropout_keep_prob, print_cost):
 
     np.random.seed(1)
     parameters = initialize_parameters(layers_dims)
-    v = initialize_velocity(parameters)
+    v,s = initialize_adam(parameters)
     m = Y.shape[1]
 
-#    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
+    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
 
     if dropout_keep_prob == 1.0:
         for i in range(num_epochs):
@@ -296,7 +302,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
                 mini_batch_X,mini_batch_Y = mini_batch
                 AL,caches = L_model_forward(mini_batch_X,parameters)
                 grads = L_model_backward(AL,mini_batch_Y,caches)
-                parameters = update_parameters(parameters, grads, v, beta1, learning_rate,lambd/mini_batch_Y.shape[1])
+                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, mini_batch_Y.shape[1])
             if print_cost and i%1000==0:
                 cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
                 prediction = predict(X,parameters)
@@ -308,7 +314,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
                 mini_batch_X,mini_batch_Y = mini_batch
                 AL,caches,cache_dropouts = L_model_forward_dropout(mini_batch_X,parameters,dropout_keep_prob)
                 grads = L_model_backward_dropout(AL,mini_batch_Y,caches,cache_dropouts,dropout_keep_prob)
-                parameters = update_parameters(parameters, grads, v, beta1, learning_rate,lambd/mini_batch_Y.shape[1])
+                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, mini_batch_Y.shape[1])
             if print_cost and i%1000==0:
                 cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
                 prediction = predict(X,parameters)
@@ -318,7 +324,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
 
 
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_epochs=10000, batch_size = 999, beta1=0.9, lambd=0.8, dropout_keep_prob=1, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_epochs=10000, batch_size = 999, beta1=0.9, beta2=0.999, lambd=0.8, dropout_keep_prob=1, print_cost=True)
 
 
 prediction = predict(X_train,parameters)
