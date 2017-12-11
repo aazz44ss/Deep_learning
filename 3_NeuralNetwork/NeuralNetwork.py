@@ -3,13 +3,9 @@ import math
 from numpy import genfromtxt
 
 """
-Adam, adaptive momentum
-v = beta1*v + (1-beta1)*dx       ==>momentum
-s = beta2*s + (1-beta2)*(dx**2)  ==>RMSprop
-W += - learning_rate * v / (np.sqrt(s) + eps)
-
-因mini_batch內的特徵值更新都是往local optimal移動，但是大方向是往global optimal
-利用RMSprob可以將所有朝local optimal的向量加起來，這樣會正負抵銷只剩下朝global optimal的分量
+1. 將regularization項放回linear_backward計算
+2. cost_prime offset AL avoid divide 0 error
+3. backward_check 修改
 """
 
 def relu(Z):
@@ -22,11 +18,11 @@ def relu_prime(Z):
     temp = 1*(Z>0)
     return temp
 def sigmoid_prime(Z):
-    a = 1/(1+np.exp(-Z))
+    a,_ = sigmoid(Z)
     a = a*(1-a)
     return a
 def cost_prime(AL,Y):
-    temp = - (np.divide(Y, AL) - np.divide(1 - Y, 1 - AL))  #may occur divide 0 error
+    temp = - (np.divide(Y, AL+0.00001) - np.divide(1 - Y, 1 - AL+0.00001))  #may occur divide 0 error
     return temp
 
 
@@ -133,7 +129,7 @@ def compute_cost(AL, Y, parameters, lambd):
     m = Y.shape[1]
     L = len(parameters)//2
 
-    cost = np.sum(-1*(Y*np.log(AL+0.0000001)+(1-Y)*np.log(1-(AL-0.0000001))))/m    #  AL offset to avoid somtimes AL close to 1 or 0, and have log(0) error
+    cost = np.sum(-1*(Y*np.log(AL+0.00001)+(1-Y)*np.log(1-(AL-0.00001))))/m    #  AL offset to avoid somtimes AL close to 1 or 0, and have log(0) error
     cost = np.squeeze(cost)      # To make sure cost's shape is what we expect (e.g. this turns [[17]] into 17).
     
     L2_regularization_cost=0
@@ -145,24 +141,24 @@ def compute_cost(AL, Y, parameters, lambd):
 
     return total_cost
 
-def cost_sigmoid_backward(AL,Y,cache):
+def cost_sigmoid_backward(AL,Y,cache,lambd):
     linear_cache, activation_cache = cache
     dZ = AL-Y
-    dA_prev,dW,db = linear_backward(dZ,linear_cache)
+    dA_prev,dW,db = linear_backward(dZ,linear_cache,lambd)
     return dA_prev,dW,db
 
-def linear_backward(dZ, linear_cache):
+def linear_backward(dZ, linear_cache, lambd):
 
     A_prev,W,b = linear_cache
     m = A_prev.shape[1]
     
-    dW = np.dot(dZ,A_prev.T)/m
+    dW = (np.dot(dZ,A_prev.T)+lambd*W)/m     # d(L2_regularization_cost)/dW term
     db = np.sum(dZ, axis=1, keepdims=True)/m
     dA_prev = np.dot(W.T,dZ)
 
     return dA_prev,dW,db
 
-def linear_activation_backward(dA, cache, activation):
+def linear_activation_backward(dA, cache, activation, lambd):
 
     linear_cache, activation_cache = cache
     Z = activation_cache
@@ -172,71 +168,64 @@ def linear_activation_backward(dA, cache, activation):
     elif activation=="sigmoid":
         dZ = dA*sigmoid_prime(Z)
     
-    dA_prev,dW,db = linear_backward(dZ,linear_cache)
+    dA_prev,dW,db = linear_backward(dZ, linear_cache, lambd)
 
     return dA_prev,dW,db
 
-def L_model_backward(AL, Y, caches):
+def L_model_backward(AL, Y, caches, lambd):
 
     grads = {}
     L = len(caches)
 
 #    dAL = cost_prime(AL,Y)
-#    dA_prev, dW, db = linear_activation_backward(dAL, caches[L-1], "sigmoid")
-    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1])  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
+#    dA_prev, dW, db = linear_activation_backward(dAL, caches[L-1], "sigmoid", lambd)
+    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1],lambd)  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
     grads["dW"+str(L)] = dW
     grads["db"+str(L)] = db
 
     for i in reversed(range(1,L)):
         dA = dA_prev
-        dA_prev, dW, db = linear_activation_backward(dA, caches[i-1], "relu")
+        dA_prev, dW, db = linear_activation_backward(dA, caches[i-1], "relu", lambd)
         grads["dW"+str(i)] = dW
         grads["db"+str(i)] = db
 
     return grads
 
-def L_model_backward_dropout(AL, Y, caches, cache_dropouts, dropout_keep_prob):
+def L_model_backward_dropout(AL, Y, caches, cache_dropouts, dropout_keep_prob, lambd):
 
     grads = {}
     L = len(caches)
 
-    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1])  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
+    dA_prev, dW, db = cost_sigmoid_backward(AL,Y,caches[L-1],lambd)  # put cost and sigmoid backward together can avoid divide 0 error occured in cost backward
     grads["dW"+str(L)] = dW
     grads["db"+str(L)] = db
 
     for i in reversed(range(1,L)):
         dA_prev = dA_prev*cache_dropouts[i-1]/dropout_keep_prob #dropout terms
         dA = dA_prev
-        dA_prev, dW, db = linear_activation_backward(dA, caches[i-1], "relu")
+        dA_prev, dW, db = linear_activation_backward(dA, caches[i-1], "relu", lambd)
         grads["dW"+str(i)] = dW
         grads["db"+str(i)] = db
 
     return grads
 
-def update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, m):
+def update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate):
 
     L = len(parameters) // 2 
     epsilon=0.00001
     for i in range(L):
-        v["dW"+str(i+1)] = beta1*v["dW"+str(i+1)] + (1-beta1)*(grads["dW"+str(i+1)] + lambd*parameters["W"+str(i+1)]/m) # d(L2_regularization_cost)/dW term
+        v["dW"+str(i+1)] = beta1*v["dW"+str(i+1)] + (1-beta1)*grads["dW"+str(i+1)]
         v["db"+str(i+1)] = beta1*v["db"+str(i+1)] + (1-beta1)*grads["db"+str(i+1)]
-        s["dW"+str(i+1)] = beta2*s["dW"+str(i+1)]+(1-beta2)*np.square(grads["dW"+str(i+1)] + lambd*parameters["W"+str(i+1)]/m)
+        s["dW"+str(i+1)] = beta2*s["dW"+str(i+1)]+(1-beta2)*np.square(grads["dW"+str(i+1)])
         s["db"+str(i+1)] = beta2*s["db"+str(i+1)]+(1-beta2)*np.square(grads["db"+str(i+1)])
         parameters["W"+str(i+1)] = parameters["W"+str(i+1)] - learning_rate*v["dW"+str(i+1)]/(np.sqrt(s["dW"+str(i+1)])+epsilon)*(1-beta2+epsilon) # epsilon avoid divide 0 error
         parameters["b"+str(i+1)] = parameters["b"+str(i+1)] - learning_rate*v["db"+str(i+1)]/(np.sqrt(s["db"+str(i+1)])+epsilon)*(1-beta2+epsilon) # (1-beta2+epsilon) can scale back and achieve close adam if we set beta2=1
 
     return parameters
 
-def backward_check_compute_cost(AL, Y):
-    
-    m = Y.shape[1]
-    cost = np.sum(-1*(Y*np.log(AL)+(1-Y)*np.log(1-(AL))))/m    
-
-    return cost
-
-def backward_check(parameters, X, Y, epsilon):
+def backward_check(parameters, X, Y, epsilon, lambd):
     AL,caches = L_model_forward(X,parameters)
-    gradients = L_model_backward(AL,Y,caches)
+    gradients = L_model_backward(AL,Y,caches, lambd)
     for key, values in parameters.items():
         for i in range(len(values)):
             numerator = 0
@@ -245,10 +234,10 @@ def backward_check(parameters, X, Y, epsilon):
 
                 parameters[key][i][j] += epsilon
                 AL, _ = L_model_forward(X,parameters)
-                cost_plus = backward_check_compute_cost(AL, Y)
+                cost_plus = compute_cost(AL, Y, parameters, lambd)
                 parameters[key][i][j] -= 2*epsilon
                 AL, _ = L_model_forward(X,parameters)
-                cost_minus = backward_check_compute_cost(AL, Y)
+                cost_minus = compute_cost(AL, Y, parameters, lambd)
                 parameters[key][i][j] += epsilon
 
                 grad_approx = (cost_plus - cost_minus)/2/epsilon
@@ -256,7 +245,6 @@ def backward_check(parameters, X, Y, epsilon):
                 numerator += np.linalg.norm(gradients["d"+key][i][j]-grad_approx)            
                 denominator += np.linalg.norm(gradients["d"+key][i][j])
                 denominator += np.linalg.norm(grad_approx)
-
         difference = numerator/denominator
         if difference < 2*epsilon:
             print("d"+str(key)+":OK")
@@ -293,7 +281,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
     v,s = initialize_adam(parameters)
     m = Y.shape[1]
 
-    backward_check(parameters, X, Y, epsilon = 1e-7)  #check backward propagation is correct or not
+#    backward_check(parameters, X, Y, epsilon = 1e-5, lambd=lambd)  #check backward propagation is correct or not
 
     if dropout_keep_prob == 1.0:
         for i in range(num_epochs):
@@ -301,8 +289,8 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
             for mini_batch in mini_batches:
                 mini_batch_X,mini_batch_Y = mini_batch
                 AL,caches = L_model_forward(mini_batch_X,parameters)
-                grads = L_model_backward(AL,mini_batch_Y,caches)
-                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, mini_batch_Y.shape[1])
+                grads = L_model_backward(AL, mini_batch_Y, caches, lambd)
+                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate)
             if print_cost and i%1000==0:
                 cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
                 prediction = predict(X,parameters)
@@ -313,8 +301,8 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
             for mini_batch in mini_batches:
                 mini_batch_X,mini_batch_Y = mini_batch
                 AL,caches,cache_dropouts = L_model_forward_dropout(mini_batch_X,parameters,dropout_keep_prob)
-                grads = L_model_backward_dropout(AL,mini_batch_Y,caches,cache_dropouts,dropout_keep_prob)
-                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate, lambd, mini_batch_Y.shape[1])
+                grads = L_model_backward_dropout(AL,mini_batch_Y,caches,cache_dropouts,dropout_keep_prob, lambd)
+                parameters = update_parameters(parameters, grads, v, s, beta1, beta2, learning_rate)
             if print_cost and i%1000==0:
                 cost = compute_cost(AL,mini_batch_Y,parameters,lambd)
                 prediction = predict(X,parameters)
@@ -324,10 +312,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_epochs, batch_size, beta
 
 
 layers_dims = [X_train.shape[0],40,30,20,10,Y_train.shape[0]]
-parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_epochs=10000, batch_size = 999, beta1=0.9, beta2=0.999, lambd=0.8, dropout_keep_prob=1, print_cost=True)
+parameters = L_layer_model(X_train, Y_train, layers_dims, learning_rate=0.01, num_epochs=100000, batch_size = 999, beta1=0.9, beta2=0.999, lambd=0.8, dropout_keep_prob=1, print_cost=True)
 
-
-prediction = predict(X_train,parameters)
-print("train accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_train)) * 100))
 prediction = predict(X_test,parameters)
 print("test accuracy: {} %".format(100 - np.mean(np.abs(prediction - Y_test)) * 100))
