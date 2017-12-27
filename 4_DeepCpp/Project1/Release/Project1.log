@@ -1,0 +1,2 @@
+﻿  Source1.cpp
+..\Source1.cpp(9): fatal error C1083: 無法開啟包含檔案: 'hdf5.h': No such file or directory

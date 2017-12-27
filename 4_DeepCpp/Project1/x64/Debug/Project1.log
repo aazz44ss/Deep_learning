@@ -1,0 +1,13 @@
+﻿  Source1.cpp
+c:\program files\hdf_group\hdf5\1.8.20\include\h5exception.h(90): warning C4251: 'H5::Exception::detail_message': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' 必須有 DLL 介面，才能被為 class 'H5::Exception' 的用戶端使用
+  c:\program files (x86)\microsoft visual studio\2017\community\vc\tools\msvc\14.11.25503\include\xstring(4079): note: 請參閱 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' 的宣告
+c:\program files\hdf_group\hdf5\1.8.20\include\h5exception.h(91): warning C4251: 'H5::Exception::func_name': class 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' 必須有 DLL 介面，才能被為 class 'H5::Exception' 的用戶端使用
+  c:\program files (x86)\microsoft visual studio\2017\community\vc\tools\msvc\14.11.25503\include\xstring(4079): note: 請參閱 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>' 的宣告
+c:\users\10611016\source\repos\project1\source1.cpp(747): warning C4244: '=': 將 'double' 轉換為 'int'，由於類型不同，可能導致資料遺失
+c:\users\10611016\source\repos\project1\source1.cpp(706): warning C4244: '*=': 將 'hsize_t' 轉換為 'int'，由於類型不同，可能導致資料遺失
+  c:\users\10611016\source\repos\project1\source1.cpp(733): note: 請參閱所要編譯的函式 樣板 具現化 'void read_HDF5_4D<double>(Blob<double> *&,std::string,std::string,Dtype,int,int)' 之參考
+          with
+          [
+              Dtype=double
+          ]
+  Project1.vcxproj -> C:\Users\10611016\source\repos\Project1\x64\Debug\Project1.exe

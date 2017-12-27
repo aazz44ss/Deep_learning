@@ -1,0 +1,22 @@
+﻿  Source1.cpp
+c:\users\10611016\source\repos\project1\source1.cpp(118): warning C4244: '正在初始化': 將 'hsize_t' 轉換為 'unsigned int'，由於類型不同，可能導致資料遺失
+c:\users\10611016\source\repos\project1\source1.cpp(121): warning C4244: '引數': 將 'hsize_t' 轉換為 'int'，由於類型不同，可能導致資料遺失
+c:\users\10611016\source\repos\project1\source1.cpp(97): warning C4101: 'a': 未參考的區域變數
+  c:\users\10611016\source\repos\project1\source1.cpp(138): note: 請參閱所要編譯的函式 樣板 具現化 'Blob<float> *logistic_regression<float>(Blob<float> &,parameter &)' 之參考
+c:\users\10611016\source\repos\project1\source1.cpp(97): warning C4101: 'b': 未參考的區域變數
+Source1.obj : error LNK2019: 無法解析的外部符號 _H5check_version 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: int __thiscall H5::DataSpace::getSimpleExtentDims(unsigned __int64 *,unsigned __int64 *)const " (?getSimpleExtentDims@DataSpace@H5@@QBEHPA_K0@Z) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: int __thiscall H5::DataSpace::getSimpleExtentNdims(void)const " (?getSimpleExtentNdims@DataSpace@H5@@QBEHXZ) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: virtual __thiscall H5::DataSpace::~DataSpace(void)" (??1DataSpace@H5@@UAE@XZ) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: class H5::DataSet __thiscall H5::CommonFG::openDataSet(char const *)const " (?openDataSet@CommonFG@H5@@QBE?AVDataSet@2@PBD@Z) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: virtual class H5::DataSpace __thiscall H5::DataSet::getSpace(void)const " (?getSpace@DataSet@H5@@UBE?AVDataSpace@2@XZ) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: void __thiscall H5::DataSet::read(void *,class H5::DataType const &,class H5::DataSpace const &,class H5::DataSpace const &,class H5::DSetMemXferPropList const &)const " (?read@DataSet@H5@@QBEXPAXABVDataType@2@ABVDataSpace@2@2ABVDSetMemXferPropList@2@@Z) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: virtual __thiscall H5::DataSet::~DataSet(void)" (??1DataSet@H5@@UAE@XZ) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: __thiscall H5::H5File::H5File(char const *,unsigned int,class H5::FileCreatPropList const &,class H5::FileAccPropList const &)" (??0H5File@H5@@QAE@PBDIABVFileCreatPropList@1@ABVFileAccPropList@1@@Z) 在函式 _main 中被參考
+Source1.obj : error LNK2019: 無法解析的外部符號 "public: virtual __thiscall H5::H5File::~H5File(void)" (??1H5File@H5@@UAE@XZ) 在函式 _main 中被參考
+Source1.obj : error LNK2001: 無法解析的外部符號 "public: static class H5::DataSpace const & const H5::DataSpace::ALL" (?ALL@DataSpace@H5@@2ABV12@B)
+Source1.obj : error LNK2001: 無法解析的外部符號 "public: static class H5::DSetMemXferPropList const & const H5::DSetMemXferPropList::DEFAULT" (?DEFAULT@DSetMemXferPropList@H5@@2ABV12@B)
+Source1.obj : error LNK2001: 無法解析的外部符號 "public: static class H5::FileAccPropList const & const H5::FileAccPropList::DEFAULT" (?DEFAULT@FileAccPropList@H5@@2ABV12@B)
+Source1.obj : error LNK2001: 無法解析的外部符號 "public: static class H5::FileCreatPropList const & const H5::FileCreatPropList::DEFAULT" (?DEFAULT@FileCreatPropList@H5@@2ABV12@B)
+Source1.obj : error LNK2001: 無法解析的外部符號 "public: static class H5::PredType const & const H5::PredType::NATIVE_INT" (?NATIVE_INT@PredType@H5@@2ABV12@B)
+C:\Users\10611016\source\repos\Project1\Debug\Project1.exe : fatal error LNK1120: 15 個無法解析的外部符號
