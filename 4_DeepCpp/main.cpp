@@ -46,9 +46,11 @@ public:
 	}
 
 	Blob() {};
-	Blob(int m, int Channel, int Height, int Width, int pad_Height = 0, int pad_Width = 0) {
+	Blob(int m, int Channel, int Height, int Width,int stride_Height=1, int stride_Width=1, int pad_Height = 0, int pad_Width = 0) {
 		pad[0] = pad_Height;
 		pad[1] = pad_Width;
+		stride[0] = stride_Height;
+		stride[1] = stride_Width;
 		shape[0] = m;
 		shape[1] = Channel;
 		shape[2] = Height + 2*pad_Height;
@@ -85,13 +87,10 @@ template <typename Dtype>
 class Blob_maxPool: public Blob<Dtype> {
 public:
 	int pool[2];
-	int stride[2];
 	int **maxPool_cache; // cache the maximum value index of Z_prev
-	Blob_maxPool(int m, int Channel, int Height, int Width, int pool_h, int pool_w, int stride_h, int stride_w, int pad_Height = 0, int pad_Width = 0): Blob<Dtype>(m,Channel,Height,Width,pad_Height,pad_Width){
+	Blob_maxPool(int m, int Channel, int Height, int Width, int pool_h, int pool_w, int stride_h = 1, int stride_w = 1, int pad_Height = 0, int pad_Width = 0): Blob<Dtype>(m,Channel,Height,Width, stride_h, stride_w,pad_Height,pad_Width){
 		pool[0] = pool_h;
 		pool[1] = pool_w;
-		stride[0] = stride_h;
-		stride[1] = stride_w;
 		maxPool_cache = new int*[m];
 
 		for (int i = 0; i < m; i++) {
@@ -241,7 +240,7 @@ Dtype cost_function(int m, Blob<Dtype> &Z, Blob<int> &Y) {
 }
 
 template <typename Dtype>
-void Convolution(int m, Blob<Dtype> &Z, parameter<Dtype> &W, Blob<Dtype> &Z_prev, int stride) {
+void Convolution(int m, Blob<Dtype> &Z, parameter<Dtype> &W, Blob<Dtype> &Z_prev) {
 	int prev_dims = Z_prev.shape[1];
 	int prev_Height_pad = Z_prev.shape[2];
 	int prev_Width_pad = Z_prev.shape[3];
@@ -252,21 +251,23 @@ void Convolution(int m, Blob<Dtype> &Z, parameter<Dtype> &W, Blob<Dtype> &Z_prev
 	int Width_pad = Z.shape[3];
 	int pad_h = Z.pad[0];
 	int pad_w = Z.pad[1];
+	int stride_h = Z.stride[0];
+	int stride_w = Z.stride[1];
 	int fk_start,fd_start,fh_start;
 	int prev_h_start, prev_w_start, prev_slice_c_start, prev_slice_h_start;
 	int k_start, h_start;
 	Dtype Z_data_cache;
 
 	// CHECK
-	if (Height_pad - 2 * pad_h != ((prev_Height_pad - f_Height) / stride + 1)) {
+	if (Height_pad - 2 * pad_h != ((prev_Height_pad - f_Height) / stride_h + 1)) {
 		printf("Conv layer doesn't match height \n");
-		printf("Z_prev_h_pad:%d, stride:%d \n", prev_Height_pad, stride);
+		printf("Z_prev_h_pad:%d, stride:%d \n", prev_Height_pad, stride_h);
 		printf("Z_h_pad:%d, pad_h:%d \n", Height_pad, pad_h);
 		printf("Filter_Height:%d \n\n", f_Height);
 	}
-	if (Width_pad - 2 * pad_w != ((prev_Width_pad - f_Width) / stride + 1)) {
+	if (Width_pad - 2 * pad_w != ((prev_Width_pad - f_Width) / stride_w + 1)) {
 		printf("Conv layer doesn't match Width \n");
-		printf("Z_prev_w_pad:%d, stride:%d \n", prev_Width_pad, stride);
+		printf("Z_prev_w_pad:%d, stride:%d \n", prev_Width_pad, stride_w);
 		printf("Z_w_pad:%d, pad_w:%d \n", Width_pad, pad_w);
 		printf("Filter_Width:%d \n\n", f_Width);
 	}
@@ -291,10 +292,10 @@ void Convolution(int m, Blob<Dtype> &Z, parameter<Dtype> &W, Blob<Dtype> &Z_prev
 			k_start = k * Height_pad * Width_pad;
 			for (int h = pad_h; h < Height_pad-pad_h; h++) {
 				h_start = k_start + h * Width_pad;
-				prev_h_start = (h-pad_h) * stride * prev_Width_pad;
+				prev_h_start = (h-pad_h) * stride_h * prev_Width_pad;
 				for (int w = pad_w; w < Width_pad-pad_w; w++) {
 					Z_data_cache = 0;
-					prev_w_start = prev_h_start + (w-pad_w) * stride;
+					prev_w_start = prev_h_start + (w-pad_w) * stride_w;
 					for (int c = 0; c < prev_dims; c++) {
 						fd_start = fk_start + c*f_Height*f_Width;
 						prev_slice_c_start = prev_w_start + c * prev_Height_pad * prev_Width_pad;
@@ -315,7 +316,7 @@ void Convolution(int m, Blob<Dtype> &Z, parameter<Dtype> &W, Blob<Dtype> &Z_prev
 }
 
 template <typename Dtype>
-void Convolution_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dtype> &dZ, parameter<Dtype> &W, gradient<Dtype> &dW, int t, int stride) {
+void Convolution_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dtype> &dZ, parameter<Dtype> &W, gradient<Dtype> &dW, int t) {
 	int prev_dims = Z_prev.shape[1];
 	int prev_Height_pad = Z_prev.shape[2];
 	int prev_Width_pad = Z_prev.shape[3];
@@ -326,6 +327,8 @@ void Convolution_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob
 	int f_Width = W.shape[3];
 	int pad_h = dZ.pad[0];
 	int pad_w = dZ.pad[1];
+	int stride_h = dZ.stride[0];
+	int stride_w = dZ.stride[1];
 
 	int fk_start,fd_start,fh_start;
 	int prev_h_start, prev_w_start, prev_slice_c_start, prev_slice_h_start;
@@ -342,9 +345,9 @@ void Convolution_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob
 			fk_start = k*prev_dims*f_Height*f_Width;
 			for (int h = pad_h; h < Height_pad-pad_h; h++) {
 				h_start = k_start + h * Width_pad;
-				prev_h_start = (h-pad_h) * stride * prev_Width_pad;
+				prev_h_start = (h-pad_h) * stride_h * prev_Width_pad;
 				for (int w = pad_w; w < Width_pad-pad_w; w++) {
-					prev_w_start = prev_h_start + (w-pad_w) * stride;
+					prev_w_start = prev_h_start + (w-pad_w) * stride_w;
 					dZ_data_cache = dZ.data[i][h_start + w];
 					for (int c = 0; c < prev_dims; c++) {
 						fd_start = fk_start + c*f_Height*f_Width;
@@ -403,7 +406,7 @@ void maxPool(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 
 	for (int i = 0; i < m; i++) {
 		for (int c = 0; c < prev_dims; c++) {
-			c_start = c * prev_Height_pad * Width_pad;
+			c_start = c * Height_pad * Width_pad;
 			prev_c_start = c * prev_Height_pad * prev_Width_pad;
 			for (int h = pad_h; h < Height_pad - pad_h; h++) {
 				h_start = c_start + h * Width_pad;
@@ -489,7 +492,7 @@ void maxPool2(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 }
 
 template <typename Dtype>
-void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dtype> &dZ, int f_Height, int f_Width, int stride) {
+void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob_maxPool<Dtype> &dZ) {
 	int prev_dims = dZ_prev.shape[1];
 	int prev_Height_pad = dZ_prev.shape[2];
 	int prev_Width_pad = dZ_prev.shape[3];
@@ -501,6 +504,10 @@ void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dty
 	int Width_pad = dZ.shape[3];
 	int pad_h = dZ.pad[0];
 	int pad_w = dZ.pad[1];
+	int pool_h = dZ.pool[0];
+	int pool_w = dZ.pool[1];
+	int stride_h = dZ.stride[0];
+	int stride_w = dZ.stride[1];
 	int prev_c_start, prev_h_start, prev_w_start, prev_slice_h_start;
 	int c_start, h_start;
 	Dtype temp_prev_slice_max;
@@ -513,13 +520,13 @@ void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dty
 			prev_c_start = c * prev_Height_pad * prev_Width_pad;
 			for (int h = pad_h; h < Height_pad - pad_h; h++) {
 				h_start = c_start + h * Width_pad;
-				prev_h_start = prev_c_start + (h-pad_h+prev_pad_h) * stride * prev_Width_pad;
+				prev_h_start = prev_c_start + (h-pad_h+prev_pad_h) * stride_h * prev_Width_pad;
 				for (int w = pad_w; w < Width_pad - pad_w; w++) {
-					prev_w_start = prev_h_start + (w-pad_w+ prev_pad_w) * stride;
+					prev_w_start = prev_h_start + (w-pad_w+ prev_pad_w) * stride_w;
 					temp_prev_slice_max = -INFINITY;
-					for (int fH = 0; fH < f_Height; fH++) {
+					for (int fH = 0; fH < pool_h; fH++) {
 						prev_slice_h_start = prev_w_start + fH * prev_Width_pad;
-						for (int fW = 0; fW < f_Width; fW++) {
+						for (int fW = 0; fW < pool_w; fW++) {
 							if (Z_prev.data[i][prev_slice_h_start + fW] > temp_prev_slice_max) {
 								temp_prev_slice_max = Z_prev.data[i][prev_slice_h_start + fW];
 								Z_prev_index = prev_slice_h_start + fW;
@@ -534,7 +541,7 @@ void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob<Dty
 }
 
 template <typename Dtype>
-void maxPool_backward2(int m, Blob<Dtype> &dZ_prev, Blob_maxPool<Dtype> &Z, Blob<Dtype> &dZ) {
+void maxPool_backward2(int m, Blob<Dtype> &dZ_prev, Blob_maxPool<Dtype> &Z, Blob_maxPool<Dtype> &dZ) {
 	int prev_dims = dZ_prev.shape[1];
 	int Height_pad = dZ.shape[2];
 	int Width_pad = dZ.shape[3];
@@ -716,7 +723,7 @@ void read_HDF5_4D(Blob<Dtype> *&container, string file_path, string data_name,Dt
 	status = H5Dread(dataset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT,
 		data_flatten);
 
-	container = new Blob<Dtype>(dim[0], dim[3], dim[1], dim[2], pad_h, pad_w);
+	container = new Blob<Dtype>(dim[0], dim[3], dim[1], dim[2], 1, 1, pad_h, pad_w);
 
 	//convert to (m,c,h,w)
 	for (int i = 0; i < dim[0]; i++) {
@@ -771,12 +778,12 @@ int main() {
 	Blob_maxPool<double> *Z1_pool = NULL, *Z2_pool = NULL;
 	Blob<double> *dZ1_conv = NULL, *dZ2_conv = NULL;
 	Blob_maxPool<double> *dZ1_pool = NULL, *dZ2_pool = NULL;
-	Z1_conv  = new Blob<double>(mini_batch, 8, 64, 64); /*((batch,channel,height,width,pad_h,pad_w))*/
-	dZ1_conv = new Blob<double>(mini_batch, 8, 64, 64);
+	Z1_conv  = new Blob<double>(mini_batch, 8, 64, 64, 1, 1, 1, 1); /*((batch, channel,height,width, stride_h,stride_w, pad_h=0,pad_w=0))*/
+	dZ1_conv = new Blob<double>(mini_batch, 8, 64, 64, 1, 1, 1, 1);
 	Z1_pool  = new Blob_maxPool<double>(mini_batch,8,16,16, 4,4, 4,4, 1,1);
 	dZ1_pool = new Blob_maxPool<double>(mini_batch,8,16,16, 4,4, 4,4, 1,1);
-	Z2_conv  = new Blob<double>(mini_batch, 16, 16, 16);
-	dZ2_conv = new Blob<double>(mini_batch, 16, 16, 16);
+	Z2_conv  = new Blob<double>(mini_batch, 16, 16, 16, 1, 1, 1, 1);
+	dZ2_conv = new Blob<double>(mini_batch, 16, 16, 16, 1, 1, 1, 1);
 	Z2_pool  = new Blob_maxPool<double>(mini_batch,16,8,8, 2,2, 2,2);
 	dZ2_pool = new Blob_maxPool<double>(mini_batch,16,8,8, 2,2, 2,2);
 
@@ -827,16 +834,16 @@ int main() {
 
 			// start
 			//L1
-			Convolution(current_batch, *Z1_conv, *W1_conv, *Z0, 1);
+			Convolution(current_batch, *Z1_conv, *W1_conv, *Z0);
 			relu(current_batch, *Z1_conv);
-			//maxPool(current_batch,*Z1_pool, *Z1_conv);
-			maxPool2(current_batch, *Z1_pool, *Z1_conv);
+			maxPool(current_batch,*Z1_pool, *Z1_conv);
+			//maxPool2(current_batch, *Z1_pool, *Z1_conv);
 
 			//L2
-			Convolution(current_batch, *Z2_conv, *W2_conv, *Z1_pool, 1);
+			Convolution(current_batch, *Z2_conv, *W2_conv, *Z1_pool);
 			relu(current_batch, *Z2_conv);
-			//maxPool(current_batch, *Z2_pool, *Z2_conv);
-			maxPool2(current_batch, *Z2_pool, *Z2_conv);
+			maxPool(current_batch, *Z2_pool, *Z2_conv);
+			//maxPool2(current_batch, *Z2_pool, *Z2_conv);
 
 			//L3
 			FC_layer(current_batch, *Z3, *W3, *Z2_pool);
@@ -862,16 +869,16 @@ int main() {
 			FC_layer_backward(current_batch, *dZ2_pool, *Z2_pool, *dZ3, *W3, *dW3, t);
 
 			//L2
-			maxPool_backward2(current_batch, *dZ2_conv, *Z2_pool, *dZ2_pool);
-			//maxPool_backward(current_batch, *dZ2_conv, *Z2_conv, *dZ2_pool, 2, 2, 2);
+			//maxPool_backward2(current_batch, *dZ2_conv, *Z2_pool, *dZ2_pool);
+			maxPool_backward(current_batch, *dZ2_conv, *Z2_conv, *dZ2_pool);
 			relu_backward(current_batch, *dZ2_conv, *Z2_conv);
-			Convolution_backward(current_batch, *dZ1_pool, *Z1_pool, *dZ2_conv, *W2_conv, *dW2_conv, t, 1);
+			Convolution_backward(current_batch, *dZ1_pool, *Z1_pool, *dZ2_conv, *W2_conv, *dW2_conv, t);
 			
 			//L1
-			maxPool_backward2(current_batch, *dZ1_conv, *Z1_pool, *dZ1_pool);
-			//maxPool_backward(current_batch,*dZ1_conv,*Z1_conv, *dZ1_pool, 4, 4, 4);
+			//maxPool_backward2(current_batch, *dZ1_conv, *Z1_pool, *dZ1_pool);
+			maxPool_backward(current_batch,*dZ1_conv,*Z1_conv, *dZ1_pool);
 			relu_backward(current_batch, *dZ1_conv, *Z1_conv);
-			Convolution_backward(current_batch, *dZ0, *Z0, *dZ1_conv, *W1_conv, *dW1_conv, t, 1);
+			Convolution_backward(current_batch, *dZ0, *Z0, *dZ1_conv, *W1_conv, *dW1_conv, t);
 		}
 		toc = clock();
 		timer = (double)(toc - tic) / CLOCKS_PER_SEC;
