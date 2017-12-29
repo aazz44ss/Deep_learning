@@ -66,16 +66,6 @@ public:
 				data[i][j] = 0;}}
 	}
 
-	void reshape(int m, int Channel, int Height, int Width) {
-		shape[0] = m;
-		shape[1] = Channel;
-		shape[2] = Height;
-		shape[3] = Width;
-		
-		if (count_with_pad != Height*Width*Channel) {
-			cout << "Reshape has different count" << endl;}
-	}
-
 	void init() {
 		for (int i = 0; i < shape[0]; i++) {
 			for (int j = 0; j < count_with_pad; j++) {
@@ -392,12 +382,12 @@ void maxPool(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 
 
 	// CHECK
-	if (Height_pad - 2 * pad_h != ((prev_Height_pad - 2 * prev_pad_h - pool_h) / stride_h + 1)) {
+	if (Height_pad - 2 * pad_h != ((prev_Height_pad - pool_h) / stride_h + 1)) {
 		printf("Pool layer doesn't match height \n");
 		printf("Z_prev_h_pad:%d, prev_pad_h:%d, stride_h:%d \n", prev_Height_pad, prev_pad_h, stride_h);
 		printf("Z_h_pad:%d, pad_h:%d \n\n", Height_pad, pad_h);
 	}
-	if (Width_pad - 2 * pad_w != ((prev_Width_pad - 2 * prev_pad_w - pool_w) / stride_w + 1)) {
+	if (Width_pad - 2 * pad_w != ((prev_Width_pad - pool_w) / stride_w + 1)) {
 		printf("Pool layer doesn't match Width \n");
 		printf("Z_prev_w_pad:%d, prev_pad_w:%d, stride_w:%d \n", prev_Width_pad, prev_pad_w, stride_w);
 		printf("Z_w_pad:%d, pad_w:%d \n\n", Width_pad, pad_w);
@@ -410,9 +400,9 @@ void maxPool(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 			prev_c_start = c * prev_Height_pad * prev_Width_pad;
 			for (int h = pad_h; h < Height_pad - pad_h; h++) {
 				h_start = c_start + h * Width_pad;
-				prev_h_start = prev_c_start + (h-pad_h+prev_pad_h) * stride_h * prev_Width_pad;
+				prev_h_start = prev_c_start + (h - pad_h) * stride_h * prev_Width_pad;
 				for (int w = pad_w; w < Width_pad - pad_w; w++) {
-					prev_w_start = prev_h_start + (w-pad_w+prev_pad_w) * stride_w;
+					prev_w_start = prev_h_start + (w - pad_w) * stride_w;
 					temp_prev_slice_max = -INFINITY;
 					for (int fH = 0; fH < pool_h; fH++) {
 						prev_slice_h_start = prev_w_start + fH * prev_Width_pad;
@@ -452,12 +442,12 @@ void maxPool2(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 	int temp_prev_slice_max_index;
 
 	// CHECK
-	if (Height_pad - 2 * pad_h != ((prev_Height_pad - 2 * prev_pad_h - pool_h) / stride_h + 1)) {
+	if (Height_pad - 2 * pad_h != ((prev_Height_pad - pool_h) / stride_h + 1)) {
 		printf("Pool layer doesn't match height \n");
 		printf("Z_prev_h_pad:%d, prev_pad_h:%d, stride_h:%d \n", prev_Height_pad, prev_pad_h, stride_h);
 		printf("Z_h_pad:%d, pad_h:%d \n\n", Height_pad, pad_h);
 	}
-	if (Width_pad - 2 * pad_w != ((prev_Width_pad - 2 * prev_pad_w - pool_w) / stride_w + 1)) {
+	if (Width_pad - 2 * pad_w != ((prev_Width_pad - pool_w) / stride_w + 1)) {
 		printf("Pool layer doesn't match Width \n");
 		printf("Z_prev_w_pad:%d, prev_pad_w:%d, stride_w:%d \n", prev_Width_pad, prev_pad_w, stride_w);
 		printf("Z_w_pad:%d, pad_w:%d \n\n", Width_pad, pad_w);
@@ -469,10 +459,10 @@ void maxPool2(int m, Blob_maxPool<Dtype> &Z, Blob<Dtype> &Z_prev) {
 			prev_c_start = c * prev_Height_pad * prev_Width_pad;
 			c_start = c * Height_pad * Width_pad;
 			for (int h = pad_h; h < Height_pad - pad_h; h++) {
-				prev_h_start = prev_c_start + (h - pad_h + prev_pad_h) * stride_h * prev_Width_pad;
+				prev_h_start = prev_c_start + (h - pad_h) * stride_h * prev_Width_pad;
 				h_start = c_start + h * Width_pad;
 				for (int w = pad_w; w < Width_pad - pad_w; w++) {
-					prev_w_start = prev_h_start + (w - pad_w + prev_pad_w) * stride_w;
+					prev_w_start = prev_h_start + (w - pad_w) * stride_w;
 					temp_prev_slice_max = -INFINITY;
 					for (int fH = 0; fH < pool_h; fH++) {
 						prev_slice_h_start = prev_w_start + fH * prev_Width_pad;
@@ -520,9 +510,9 @@ void maxPool_backward(int m, Blob<Dtype> &dZ_prev, Blob<Dtype> &Z_prev, Blob_max
 			prev_c_start = c * prev_Height_pad * prev_Width_pad;
 			for (int h = pad_h; h < Height_pad - pad_h; h++) {
 				h_start = c_start + h * Width_pad;
-				prev_h_start = prev_c_start + (h-pad_h+prev_pad_h) * stride_h * prev_Width_pad;
+				prev_h_start = prev_c_start + (h-pad_h) * stride_h * prev_Width_pad;
 				for (int w = pad_w; w < Width_pad - pad_w; w++) {
-					prev_w_start = prev_h_start + (w-pad_w+ prev_pad_w) * stride_w;
+					prev_w_start = prev_h_start + (w-pad_w) * stride_w;
 					temp_prev_slice_max = -INFINITY;
 					for (int fH = 0; fH < pool_h; fH++) {
 						prev_slice_h_start = prev_w_start + fH * prev_Width_pad;
@@ -778,12 +768,12 @@ int main() {
 	Blob_maxPool<double> *Z1_pool = NULL, *Z2_pool = NULL;
 	Blob<double> *dZ1_conv = NULL, *dZ2_conv = NULL;
 	Blob_maxPool<double> *dZ1_pool = NULL, *dZ2_pool = NULL;
-	Z1_conv  = new Blob<double>(mini_batch, 8, 64, 64, 1, 1, 1, 1); /*((batch, channel,height,width, stride_h,stride_w, pad_h=0,pad_w=0))*/
-	dZ1_conv = new Blob<double>(mini_batch, 8, 64, 64, 1, 1, 1, 1);
+	Z1_conv  = new Blob<double>(mini_batch, 8, 64, 64); /*((batch, channel,height,width, stride_h=1,stride_w=1, pad_h=0,pad_w=0))*/
+	dZ1_conv = new Blob<double>(mini_batch, 8, 64, 64);
 	Z1_pool  = new Blob_maxPool<double>(mini_batch,8,16,16, 4,4, 4,4, 1,1);
 	dZ1_pool = new Blob_maxPool<double>(mini_batch,8,16,16, 4,4, 4,4, 1,1);
-	Z2_conv  = new Blob<double>(mini_batch, 16, 16, 16, 1, 1, 1, 1);
-	dZ2_conv = new Blob<double>(mini_batch, 16, 16, 16, 1, 1, 1, 1);
+	Z2_conv  = new Blob<double>(mini_batch, 16, 16, 16);
+	dZ2_conv = new Blob<double>(mini_batch, 16, 16, 16);
 	Z2_pool  = new Blob_maxPool<double>(mini_batch,16,8,8, 2,2, 2,2);
 	dZ2_pool = new Blob_maxPool<double>(mini_batch,16,8,8, 2,2, 2,2);
 
