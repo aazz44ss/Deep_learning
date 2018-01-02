@@ -125,7 +125,7 @@ class gradient {
 public:
 	Dtype *dW, *vW, *sW;
 	Dtype *db, *vb, *sb;
-	Dtype beta1 = 0.9, beta2 = 0.999, lambd = 0;
+	Dtype beta1, beta2, lambd;
 	int shape[4];
 
 	gradient(int dims, int prev_dims, int fH, int fW) {
@@ -134,6 +134,10 @@ public:
 		shape[2] = fH;
 		shape[3] = fW;
 		
+		beta1 = 0.9;
+		beta2 = 0.999;
+		lambd = 0;
+
 		dW = new Dtype[dims*prev_dims*fH*fW];
 		vW = new Dtype[dims*prev_dims*fH*fW];
 		sW = new Dtype[dims*prev_dims*fH*fW];
@@ -690,7 +694,7 @@ Dtype compute_accuracy(int m, Blob<Dtype> &Z, Blob<int> &Y) {
 }
 
 template <typename Dtype>
-void read_HDF5_4D(Blob<Dtype> *&container, string file_path, string data_name,Dtype normalize, int pad_h = 0, int pad_w = 0) {
+void read_HDF5_4D(Blob<Dtype> *&container, std::string file_path, std::string data_name, Dtype normalize, int stride_h = 1, int stride_w = 1, int pad_h = 0, int pad_w = 0) {
 	hid_t file_id, dataset_id, dataspace;
 	int status;
 	file_id = H5Fopen(file_path.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
@@ -713,7 +717,7 @@ void read_HDF5_4D(Blob<Dtype> *&container, string file_path, string data_name,Dt
 	status = H5Dread(dataset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT,
 		data_flatten);
 
-	container = new Blob<Dtype>(dim[0], dim[3], dim[1], dim[2], 1, 1, pad_h, pad_w);
+	container = new Blob<Dtype>(dim[0], dim[3], dim[1], dim[2], stride_h, stride_w, pad_h, pad_w);
 
 	//convert to (m,c,h,w)
 	for (int i = 0; i < dim[0]; i++) {
@@ -739,7 +743,7 @@ int main() {
 
 	Blob<double> *X,*X_test;
 	Blob<int> *Y,*Y_test;
-	read_HDF5_4D<double>(X, "..\\data\\signs_train.h5", "train_set_x",/*normalize*/255,/*Pad*/2,2);
+	read_HDF5_4D<double>(X, "..\\data\\signs_train.h5", "train_set_x",/*normalize*/255,/*stride*/1, 1,/*Pad*/2,2);
 	read_HDF5_4D<int>(Y, "..\\data\\signs_train.h5", "train_set_y",1);
 	read_HDF5_4D<double>(X_test, "..\\data\\signs_test.h5", "test_set_x", 255,0,0);
 	read_HDF5_4D<int>(Y_test, "..\\data\\signs_test.h5", "test_set_y", 1);
